@@ -21,6 +21,9 @@ import org.hyperledger.fabric.shim.ledger.CompositeKey;
 import org.hyperledger.fabric.shim.ledger.KeyValue;
 import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hyperledger.fabric.samples.erc721.utils.ContractUtility.stringIsNullOrEmpty;
 
@@ -307,6 +310,86 @@ public class ERC721TokenContract implements ContractInterface {
       }
     }
     return totalSupply;
+  }
+
+  /**
+   * Returns all non-fungible tokens stored by the contract.
+   * @param ctx the transaction context
+   * @return array of non-fungible tokens
+   */
+  @Transaction(intent = Transaction.TYPE.EVALUATE)
+  public NFT[] Tokens(final Context ctx) {
+    this.checkInitialized(ctx);
+    final ChaincodeStub stub = ctx.getStub();
+    final CompositeKey nftKey = stub.createCompositeKey(ContractConstants.NFT.getValue());
+    final QueryResultsIterator<KeyValue> iterator = stub.getStateByPartialCompositeKey(nftKey);
+    final List<NFT> nftList = new ArrayList<>();
+    for (KeyValue result : iterator) {
+      if (!stringIsNullOrEmpty(result.getStringValue())) {
+          nftList.add(NFT.fromJSONString(result.getStringValue()));
+      }
+    }
+    return nftList.toArray(new NFT[0]);
+  }
+
+  /**
+   * Returns a token id of non-fungible token at a given index of all the tokens stored by the contract.
+   * Use along with {@link ERC721TokenContract#TotalSupply} to enumerate all tokens.
+   * @param ctx the transaction context
+   * @param index index to search
+   * @return non-fungible token at a given index
+   */
+  @Transaction(intent = Transaction.TYPE.EVALUATE)
+  public String TokenByIndex(final Context ctx, final int index) {
+    this.checkInitialized(ctx);
+    if (index >= TotalSupply(ctx)) {
+      throw new ChaincodeException(
+              String.format("The index %d is out of range.", index),
+              ContractErrors.INDEX_OUT_OF_RANGE.toString());
+    }
+    return Tokens(ctx)[index].getTokenId();
+  }
+
+  /**
+   * Returns all non-fungible tokens owned by owner.
+   * @param ctx the transaction context
+   * @param owner the client that owns the non-fungible tokens
+   * @return array of non-fungible tokens owned by owner
+   */
+  @Transaction(intent = Transaction.TYPE.EVALUATE)
+  public NFT[] TokensOfOwner(final Context ctx, final String owner) {
+    this.checkInitialized(ctx);
+    final ChaincodeStub stub = ctx.getStub();
+    final CompositeKey nftKey = stub.createCompositeKey(ContractConstants.NFT.getValue());
+    final QueryResultsIterator<KeyValue> iterator = stub.getStateByPartialCompositeKey(nftKey);
+    final List<NFT> nftList = new ArrayList<>();
+    for (KeyValue result : iterator) {
+      if (!stringIsNullOrEmpty(result.getStringValue())) {
+        if (NFT.fromJSONString(result.getStringValue()).getOwner().equals(owner)) {
+          nftList.add(NFT.fromJSONString(result.getStringValue()));
+        }
+      }
+    }
+    return nftList.toArray(new NFT[0]);
+  }
+
+  /**
+   * Returns a token id of non-fungible token owned by owner at a given index of its token list.
+   * Use along with {@link ERC721TokenContract#BalanceOf} to enumerate all of owner's tokens.
+   * @param ctx the transaction context
+   * @param owner the client that owns the non-fungible tokens
+   * @param index index to search
+   * @return token id of non-fungible token owned by owner at a given index
+   */
+  @Transaction(intent = Transaction.TYPE.EVALUATE)
+  public String TokenOfOwnerByIndex(final Context ctx, final String owner, final int index) {
+    this.checkInitialized(ctx);
+    if (index >= BalanceOf(ctx, owner)) {
+      throw new ChaincodeException(
+              String.format("The index %d is out of range.", index),
+              ContractErrors.INDEX_OUT_OF_RANGE.toString());
+    }
+    return TokensOfOwner(ctx, owner)[index].getTokenId();
   }
 
   /** ============== Extended Functions for this sample =============== * */
